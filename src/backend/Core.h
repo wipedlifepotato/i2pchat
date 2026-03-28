@@ -115,6 +115,7 @@ private slots:
                                QString Name, QString Value = "",
                                QString Message = "");
   void slotStreamControllerStatusOK(bool Status);
+  void slotReconnectAttempt();
   void slotIncomingStream(CI2PStream *stream);
   void slotNewSamPrivKeyGenerated(const QString SamPrivKey);
   // </SIGNALS FROM CONNECTIONMANAGER>
@@ -124,6 +125,7 @@ signals:
   void signOnlineStatusChanged();
   void signOwnAvatarImageChanged();
   void signNicknameChanged();
+  void signIncomingUserAuthorizationRequest(QString destination, qint32 streamID, QByteArray data);
 
 private:
   CConnectionManager *mConnectionManager;

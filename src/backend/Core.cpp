@@ -33,13 +33,15 @@
 
 CCore::CCore(QString configPath) {
   mConfigPath = configPath;
-
+  mCurrentOnlineStatus = User::USEROFFLINE;  // Initialize immediately
+  
   mDebugMessageHandler = new CDebugMessageManager("General", configPath);
   mSoundManager = new CSoundManager(mConfigPath);
 
   QSettings settings(mConfigPath + "/application.ini", QSettings::IniFormat);
-  m_access_anyone_incoming =
-      settings.value("Users/allow_incoming_new_users", true).toBool();
+  settings.beginGroup("Users");
+  m_access_anyone_incoming = settings.value("allow_incoming_new_users", true).toBool();
+  settings.endGroup();
   settings.beginGroup("Network");
   mMyDestinationB32 = settings.value("MyDestinationB32", "").toString(),
 
@@ -55,10 +57,13 @@ CCore::CCore(QString configPath) {
                                        QString, QString)),
           Qt::DirectConnection);
 
-  connect(mConnectionManager, SIGNAL(signStreamControllerStatusOK(bool)), this,
-          SLOT(slotStreamControllerStatusOK(bool)));
+   connect(mConnectionManager, SIGNAL(signStreamControllerStatusOK(bool)), this,
+           SLOT(slotStreamControllerStatusOK(bool)));
 
-  connect(mConnectionManager, SIGNAL(signNewSamPrivKeyGenerated(const QString)),
+   connect(mConnectionManager, SIGNAL(signReconnectAttempt()), this,
+           SLOT(slotReconnectAttempt()));
+
+   connect(mConnectionManager, SIGNAL(signNewSamPrivKeyGenerated(const QString)),
           this, SLOT(slotNewSamPrivKeyGenerated(const QString)));
 
   connect(mConnectionManager,
@@ -84,6 +89,7 @@ CCore::CCore(QString configPath) {
   mProtocol = new CProtocol(*this);
   this->mCurrentOnlineStatus = User::USEROFFLINE;
 
+  qDebug() << "CCore constructor: calling loadUserInfos";
   loadUserInfos();
   /*
       settings.beginGroup("Usersearch");
@@ -268,19 +274,27 @@ QString CCore::calcSessionOptionString() const {
 void CCore::init() {
   using namespace SESSION_ENUMS;
 
+  qDebug() << "CCore::init() called";
   this->mMyDestination = "";
 
   QSettings settings(mConfigPath + "/application.ini", QSettings::IniFormat);
   settings.beginGroup("Network");
 
+  QString SamHost = settings.value("SamHost", "127.0.0.1").toString();
+  QString SamPort = settings.value("SamPort", "7656").toString();
   QString SamPrivKey = settings.value("SamPrivKey", "").toString();
+  
+  qDebug() << "CCore::init() - SamHost:" << SamHost << "SamPort:" << SamPort << "HasPrivKey:" << !SamPrivKey.isEmpty();
 
   if (mConnectionManager->isComponentStopped()) {
+    qDebug() << "CCore::init() - Connection manager stopped, restarting...";
     mConnectionManager->doReStart();
   }
 
+  qDebug() << "CCore::init() - Creating session...";
   mConnectionManager->doCreateSession(STREAM, SamPrivKey,
                                       calcSessionOptionString());
+  qDebug() << "CCore::init() - Session create called";
 
   settings.endGroup();
   settings.sync();
@@ -419,15 +433,15 @@ void CCore::slotNamingReplyReceived(const SAM_Message_Types::RESULT result,
       theUser->setReplaceB32WithB64(Value);
     }
   } else if (result == SAM_Message_Types::FAILED) {
-    qWarning() << "File\t" << __FILE__ << endl
-               << "Line:\t" << __LINE__ << endl
+    qWarning() << "File\t" << __FILE__ << Qt::endl
+               << "Line:\t" << __LINE__ << Qt::endl
                << "Function:\t"
-               << "CCore::slotNamingReplyReceived" << endl
+               << "CCore::slotNamingReplyReceived" << Qt::endl
                << "Message:\t"
-               << "slotNamingReplyReceived\nSAM_Message_Types::FAILED" << endl
-               << "Name:\t" << Name << endl
-               << "Value:\t" << Value << endl
-               << "Message:\t" << Message << endl;
+               << "slotNamingReplyReceived\nSAM_Message_Types::FAILED" << Qt::endl
+               << "Name:\t" << Name << Qt::endl
+               << "Value:\t" << Value << Qt::endl
+               << "Message:\t" << Message << Qt::endl;
   }
 }
 const QString CCore::getMyDestination() const { return this->mMyDestination; }
@@ -556,12 +570,16 @@ ONLINESTATE CCore::getOnlineStatus() const {
 }
 
 void CCore::setOnlineStatus(const ONLINESTATE newStatus) {
+  qDebug() << "setOnlineStatus: newStatus =" << newStatus << "currentStatus =" << mCurrentOnlineStatus;
+  
   if (mCurrentOnlineStatus == newStatus)
     return;
 
   if (mCurrentOnlineStatus == USEROFFLINE) {
+    qDebug() << "setOnlineStatus: Transitioning from OFFLINE, storing next status =" << newStatus;
     mNextOnlineStatus = newStatus;
     mCurrentOnlineStatus = USERTRYTOCONNECT;
+    qDebug() << "setOnlineStatus: Calling init()...";
     init();
     emit signOnlineStatusChanged();
     return;
@@ -672,7 +690,17 @@ void CCore::slotStreamControllerStatusOK(bool Status) {
     }
     createStreamObjectsForAllUsers();
     emit signOnlineStatusChanged();
+  } else {
+    // Session lost - go offline but remember desired status
+    mCurrentOnlineStatus = User::USEROFFLINE;
+    emit signOnlineStatusChanged();
   }
+}
+
+void CCore::slotReconnectAttempt() {
+  // Session reconnect attempt started - show connecting status
+  mCurrentOnlineStatus = User::USERTRYTOCONNECT;
+  emit signOnlineStatusChanged();
 }
 
 void CCore::createStreamObjectsForAllUsers() {
@@ -796,30 +824,18 @@ bool CCore::useThisChatConnection(const QString Destination, const qint32 ID) {
 
 void CCore::loadUserInfos() {
   QSettings settings(mConfigPath + "/application.ini", QSettings::IniFormat);
-  settings.beginGroup("User-Infos");
-  if (mUserInfos.Nickname != settings.value("Nickname", "").toString()) {
-    mUserInfos.Nickname = settings.value("Nickname", "").toString();
+  settings.sync();
+  
+  settings.beginGroup("User");
+  QString savedNickname = settings.value("Nickname", "").toString();
+  
+  if (mUserInfos.Nickname != savedNickname) {
+    mUserInfos.Nickname = savedNickname;
     emit signNicknameChanged();
   }
 
   if (mUserInfos.Nickname.isEmpty() == true) {
-    // generate random Nickname (8 Chars)
-
-    /*
-        const QString possibleCharacters(
-            "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz");
-        const int randomStringLength = 8;
-
-        QString randomString;
-        for (int i = 0; i < randomStringLength; ++i) {
-          int index = qrand() % possibleCharacters.length();
-          QChar nextChar = possibleCharacters.at(index);
-          randomString.append(nextChar);
-        }
-    */
     mUserInfos.Nickname = "Undefined";
-
-    settings.setValue("Nickname", mUserInfos.Nickname);
     emit signNicknameChanged();
 
     QMessageBox *msgBox = new QMessageBox(NULL);
@@ -843,19 +859,19 @@ void CCore::loadUserInfos() {
   } else if (settings.value("Gender", "").toString() == "Female") {
     mUserInfos.Gender = "Female";
   }
-  if (mUserInfos.AvatarImage !=
-      settings.value("AvatarBinaryImage", "").toByteArray()) {
-    mUserInfos.AvatarImage =
-        settings.value("AvatarBinaryImage", "").toByteArray();
-    emit signOwnAvatarImageChanged();
-  }
-  settings.endGroup();
-  settings.sync();
+   if (mUserInfos.AvatarImage !=
+       settings.value("AvatarBinaryImage", "").toByteArray()) {
+     mUserInfos.AvatarImage =
+         settings.value("AvatarBinaryImage", "").toByteArray();
+     emit signOwnAvatarImageChanged();
+   }
+   settings.endGroup();
+   settings.sync();
 
-  if (!nicknameRegExp.exactMatch(mUserInfos.Nickname)) {
-    mUserInfos.Nickname = "NonValidNick";
-    emit signNicknameChanged();
-  }
+   if (!nicknameRegExp.exactMatch(mUserInfos.Nickname)) {
+     mUserInfos.Nickname = "NonValidNick";
+     emit signNicknameChanged();
+   }
 }
 
 const CReceivedInfos CCore::getUserInfos() const { return mUserInfos; }
@@ -896,15 +912,15 @@ void CCore::setMyDestinationB32(QString B32Dest) {
     return;
 
   if (!B32Dest.right(8).contains(".b32.i2p", Qt::CaseInsensitive)) {
-    qCritical() << "File\t" << __FILE__ << endl
-                << "Line:\t" << __LINE__ << endl
+    qCritical() << "File\t" << __FILE__ << Qt::endl
+                << "Line:\t" << __LINE__ << Qt::endl
                 << "Function:\t"
-                << "CCore::setMyDestinationB32" << endl
+                << "CCore::setMyDestinationB32" << Qt::endl
                 << "Message:\t"
-                << "the last 8 char must be .b32.i2p" << endl
+                << "the last 8 char must be .b32.i2p" << Qt::endl
                 << "\tDestination:\n"
-                << B32Dest << endl
-                << "\tAction apported" << endl;
+                << B32Dest << Qt::endl
+                << "\tAction apported" << Qt::endl;
   }
 
   QSettings settings(mConfigPath + "/application.ini", QSettings::IniFormat);

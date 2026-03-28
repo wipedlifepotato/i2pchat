@@ -12,8 +12,8 @@ CTextEmotionChanger *CTextEmotionChanger::exemplar() {
 CTextEmotionChanger::~CTextEmotionChanger() {}
 
 CTextEmotionChanger::CTextEmotionChanger() {
-  m_check_space = false;
-  m_emoticons_path = ":/emoticons/emoticons.xml";
+  m_check_space = true; // Enable word boundary checking
+  m_emoticons_path = ":/emoticons.xml";
   setEmoticonPath(m_emoticons_path);
 }
 void CTextEmotionChanger::checkMessageForEmoticons(QString &message) {
@@ -56,14 +56,16 @@ void CTextEmotionChanger::checkMessageForEmoticons(QString &message) {
       at_amp = false;
     } else if (state != TagText) {
       at_amp = cur == '&';
-      if (!m_check_space || chars == begin || (chars - 1)->isSpace()) {
+      if (!m_check_space || chars == begin || (chars - 1)->isSpace() || (chars - 1)->isPunct()) {
         bool found = false;
         it = m_emoticons.constBegin();
         for (; it != m_emoticons.constEnd(); ++it) {
           int length = (*it).first.length();
           if (compareEmoticon(chars, (*it).first) &&
-              (!m_check_space || (chars + length)->isNull() ||
-               (chars + length)->isSpace())) {
+              (!m_check_space || ( 
+               (chars + length)->isNull() ||
+               (chars + length)->isSpace() ||
+               (chars + length)->isPunct()))) {
             appendEmoticon(
                 result, (*it).second,
                 QStringRef(&message, chars - begin, (*it).first.length()));
@@ -118,9 +120,17 @@ void CTextEmotionChanger::setEmoticonPath(const QString &path) {
   m_emoticons.clear();
   QFile file(path);
   QString dirPath = QFileInfo(path).absolutePath();
+  if (path.startsWith(":/")) {
+    dirPath = ":/emoticons";
+  }
   m_dir_path = dirPath;
-  QDir dir(dirPath);
-  QStringList fileList = dir.entryList(QDir::Files);
+  QStringList fileList;
+  if (path.startsWith(":/")) {
+    fileList = QDir(":/emoticons").entryList(QDir::Files);
+  } else {
+    QDir dir(dirPath);
+    fileList = dir.entryList(QDir::Files);
+  }
   if (file.exists() && file.open(QIODevice::ReadOnly)) {
     QDomDocument doc;
     if (doc.setContent(&file)) {

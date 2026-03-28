@@ -22,6 +22,7 @@
 
 #include <QSocketNotifier>
 #include <QTcpSocket>
+#include <QTimer>
 #include <QtGui>
 
 #include "I2PSamMessageAnalyser.h"
@@ -45,16 +46,18 @@ public:
 
 signals:
   void signDebugMessages(const QString Message);
+  void signSessionStreamStatusOK(bool Status);
+  void signReconnectAttempt();
   void signNamingReplyReceived(const SAM_Message_Types::RESULT result,
                                QString Name, QString Value = "",
                                QString Message = "");
-  void signSessionStreamStatusOK(bool Status);
   void signNewSamPrivKeyGenerated(const QString SamPrivKey);
 
-private slots:
-  void slotConnected();
-  void slotDisconnected();
-  void slotReadFromSocket();
+ private slots:
+   void slotConnected();
+   void slotDisconnected();
+   void slotReadFromSocket();
+   void slotReconnectTimeout();
 
 private:
   void doSessionCreate();
@@ -66,13 +69,14 @@ private:
   const QString mConfigPath;
   const QString mSessionOptions;
 
-  QTcpSocket mTcpSocket;
-  CI2PSamMessageAnalyser *mAnalyser;
-  QByteArray *mIncomingPackets;
+   QTcpSocket mTcpSocket;
+   CI2PSamMessageAnalyser *mAnalyser;
+   QByteArray *mIncomingPackets;
+   QTimer *mReconnectTimer;
 
-  bool mHandshakeSuccessful;
-  bool mSessionWasSuccesfullCreated;
-  bool mDoneDisconnect;
+   bool mHandshakeSuccessful;
+   bool mSessionWasSuccesfullCreated;
+   bool mDoneDisconnect;
 
   inline void ConnectionReadyCheck() {
     if (mHandshakeSuccessful == false ||

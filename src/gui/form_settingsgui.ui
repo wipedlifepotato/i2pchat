@@ -1258,33 +1258,36 @@ p, li { white-space: pre-wrap; }
          <number>10</number>
         </property>
         <item row="0" column="0" alignment="Qt::AlignVCenter">
-         <widget class="QLabel" name="label_13">
-          <property name="minimumSize">
-           <size>
-            <width>120</width>
-            <height>20</height>
-           </size>
-          </property>
-          <property name="maximumSize">
-           <size>
-            <width>120</width>
-            <height>20</height>
-           </size>
-          </property>
-          <property name="baseSize">
-           <size>
-            <width>120</width>
-            <height>0</height>
-           </size>
-          </property>
-          <property name="text">
-           <string>Signature Type:</string>
-          </property>
-          <property name="alignment">
-           <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
-          </property>
-         </widget>
-        </item>
+      <widget class="QLabel" name="label_13">
+       <property name="geometry">
+        <rect>
+         <x>14</x>
+         <y>54</y>
+         <width>405</width>
+         <height>21</height>
+        </rect>
+       </property>
+       <property name="text">
+        <string>Request Authorization</string>
+       </property>
+      </widget>
+       <widget class="QCheckBox" name="requestAuthcheckBox">
+        <property name="enabled">
+         <bool>true</bool>
+        </property>
+        <property name="geometry">
+         <rect>
+          <x>14</x>
+          <y>76</y>
+          <width>405</width>
+          <height>21</height>
+         </rect>
+        </property>
+        <property name="text">
+         <string>Request Authorization</string>
+        </property>
+        </widget>
+         </item>
         <item row="0" column="1" alignment="Qt::AlignVCenter">
          <widget class="QComboBox" name="comboBox_SigType">
           <property name="enabled">
@@ -2203,10 +2206,10 @@ p, li { white-space: pre-wrap; }
        </property>
        <layout class="QGridLayout" name="gridLayout_3">
         <item row="0" column="0">
-         <widget class="QCheckBox" name="checkBox_5">
-          <property name="enabled">
-           <bool>false</bool>
-          </property>
+          <widget class="QCheckBox" name="checkBox_5">
+           <property name="enabled">
+            <bool>true</bool>
+           </property>
           <property name="minimumSize">
            <size>
             <width>0</width>
@@ -2228,10 +2231,10 @@ p, li { white-space: pre-wrap; }
          </widget>
         </item>
         <item row="1" column="0">
-         <widget class="QRadioButton" name="radioButton_2">
-          <property name="enabled">
-           <bool>false</bool>
-          </property>
+          <widget class="QRadioButton" name="radioButton_2">
+           <property name="enabled">
+            <bool>true</bool>
+           </property>
           <property name="minimumSize">
            <size>
             <width>0</width>
@@ -2253,10 +2256,10 @@ p, li { white-space: pre-wrap; }
          </widget>
         </item>
         <item row="2" column="0">
-         <widget class="QRadioButton" name="radioButton_3">
-          <property name="enabled">
-           <bool>false</bool>
-          </property>
+          <widget class="QRadioButton" name="radioButton_3">
+           <property name="enabled">
+            <bool>true</bool>
+           </property>
           <property name="minimumSize">
            <size>
             <width>0</width>
@@ -2278,10 +2281,10 @@ p, li { white-space: pre-wrap; }
          </widget>
         </item>
         <item row="3" column="0">
-         <widget class="QRadioButton" name="radioButton_4">
-          <property name="enabled">
-           <bool>false</bool>
-          </property>
+          <widget class="QRadioButton" name="radioButton_4">
+           <property name="enabled">
+            <bool>true</bool>
+           </property>
           <property name="minimumSize">
            <size>
             <width>0</width>
@@ -2303,10 +2306,10 @@ p, li { white-space: pre-wrap; }
          </widget>
         </item>
         <item row="4" column="0">
-         <widget class="QRadioButton" name="radioButton_5">
-          <property name="enabled">
-           <bool>false</bool>
-          </property>
+          <widget class="QRadioButton" name="radioButton_5">
+           <property name="enabled">
+            <bool>true</bool>
+           </property>
           <property name="minimumSize">
            <size>
             <width>0</width>
@@ -2356,25 +2359,10 @@ p, li { white-space: pre-wrap; }
       <property name="title">
        <string>Authorization</string>
       </property>
-      <widget class="QCheckBox" name="requestauthcheckBox">
-       <property name="enabled">
-        <bool>false</bool>
-       </property>
-       <property name="geometry">
-        <rect>
-         <x>14</x>
-         <y>56</y>
-         <width>405</width>
-         <height>21</height>
-        </rect>
-       </property>
-       <property name="text">
-        <string>Request Authorization</string>
-       </property>
-      </widget>
+
       <widget class="QCheckBox" name="blockallcheckBox">
        <property name="enabled">
-        <bool>false</bool>
+        <bool>true</bool>
        </property>
        <property name="geometry">
         <rect>

@@ -26,7 +26,7 @@
 #include "User.h"
 #include <QObject>
 #include <QRegExp>
-static const QRegExp nicknameRegExp("^([a-zA-Z0-9_ |]){1,12}$");
+static const QRegExp nicknameRegExp("^[a-zA-Z0-9_ ]{1,12}$");
 
 class CUserManager : public QObject {
   Q_OBJECT
@@ -45,6 +45,7 @@ public:
                   bool SaveUserList = true);
   bool checkIfUserExistsByI2PDestination(QString I2PDestination) const;
   void changeUserPositionInUserList(int oldPos, int newPos);
+  void sortUserList(int sortType);
   bool renameUserByI2PDestination(const QString Destination,
                                   const QString newNickname);
   bool deleteUserByI2PDestination(const QString I2PDestination);
@@ -63,12 +64,13 @@ signals:
 private slots:
   void slotSaveUnsentMessageForDest(QString I2PDest);
 
-private:
+ private:
   CCore &mCore;
   const QString mUserFileWithPath;
   CUnsentChatMessageStorage &mUnsentMessageStorage;
   QList<CUser *> mUsers;
+  bool mSortingEnabled;
 
-private:
+ private:
 };
 #endif // CUSERMANAGER_H

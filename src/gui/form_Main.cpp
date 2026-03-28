@@ -21,6 +21,7 @@
 #include "form_Main.h"
 #include "UserManager.h"
 #include <QIcon>
+#include <QMessageBox>
 #include <QSystemTrayIcon>
 
 form_MainWindow::form_MainWindow(QString configDir, QWidget *parent)
@@ -31,12 +32,14 @@ form_MainWindow::form_MainWindow(QString configDir, QWidget *parent)
 
   QApplication::setQuitOnLastWindowClosed(false);
   Core = new CCore(configDir);
-  connect(Core, SIGNAL(signUserStatusChanged()), this,
-          SLOT(eventUserChanged()));
-  connect(this, SIGNAL(changeAllowIncoming(bool)), Core,
-          SLOT(changeAccessIncomingUsers(bool)));
-  connect(Core, SIGNAL(signOnlineStatusChanged()), this,
-          SLOT(OnlineStateChanged()));
+   connect(Core, SIGNAL(signUserStatusChanged()), this,
+           SLOT(eventUserChanged()));
+   connect(this, SIGNAL(changeAllowIncoming(bool)), Core,
+           SLOT(changeAccessIncomingUsers(bool)));
+   connect(Core, SIGNAL(signOnlineStatusChanged()), this,
+           SLOT(OnlineStateChanged()));
+   connect(Core, SIGNAL(signIncomingUserAuthorizationRequest(QString, qint32, QByteArray)), this,
+           SLOT(incomingUserAuthorizationRequest(QString, qint32, QByteArray)));
 
   connect(listWidget, SIGNAL(itemDoubleClicked(QListWidgetItem *)), this,
           SLOT(openUserListeClicked()));
@@ -115,8 +118,10 @@ void form_MainWindow::onlineComboBoxChanged() {
       msgBox->show();
       OnlineStateChanged();
     }
-  } else if (text.contains(tr("Connecting"), Qt::CaseInsensitive) == true) {
-  }
+   } else if (text.contains(tr("Connecting"), Qt::CaseInsensitive) == true) {
+     if (Core->getOnlineStatus() != User::USERTRYTOCONNECT)
+       Core->setOnlineStatus(User::USERTRYTOCONNECT);
+   }
 }
 
 void form_MainWindow::initToolBars() {
@@ -451,8 +456,8 @@ void form_MainWindow::connecttreeWidgetCostumPopupMenu(QPoint point) {
 
   QAction *UserAutoDownload = new QAction(QIcon(ICON_USER_DOWNLOAD), tr("Auto-download"), this);
   UserAutoDownload->setCheckable(true);
-  // connect(UserAutoDownload, SIGNAL(triggered(bool)), this,
-  //         SLOT(UserAutoDownload(bool)));
+  connect(UserAutoDownload, SIGNAL(triggered(bool)), this,
+          SLOT(UserAutoDownload(bool)));
   UserAutoDownload->setEnabled(false);
 
   QAction *UserInvisible =
@@ -491,6 +496,10 @@ void form_MainWindow::connecttreeWidgetCostumPopupMenu(QPoint point) {
   connect(UP, SIGNAL(triggered()), this, SLOT(UserPositionUP()));
   QAction *DOWN = new QAction(tr("Down"), this);
   connect(DOWN, SIGNAL(triggered()), this, SLOT(UserPositionDOWN()));
+  QAction *TOP = new QAction(tr("Move to Top"), this);
+  connect(TOP, SIGNAL(triggered()), this, SLOT(UserPositionTOP()));
+  QAction *BOTTOM = new QAction(tr("Move to Bottom"), this);
+  connect(BOTTOM, SIGNAL(triggered()), this, SLOT(UserPositionBOTTOM()));
 
   contextMnu.clear();
   contextMnu.addAction(UserChat);
@@ -521,16 +530,35 @@ void form_MainWindow::connecttreeWidgetCostumPopupMenu(QPoint point) {
 
     contextMnu.addAction(UserInvisible);
     contextMnu.addAction(UserAutoDownload);
-    contextMnu.addAction(UserToBlockList);
-    contextMnu.addAction(UserDelete);
     contextMnu.addSeparator();
     contextMnu.addAction(ShowUserInfos);
     contextMnu.addAction(CopyDestination);
     contextMnu.addAction(CopyB32);
     contextMnu.addAction(UserRename);
 
+    // Enable Copy B32 only if user is online (can do naming lookup)
+    if (User->getConnectionStatus() == ONLINE) {
+      CopyB32->setEnabled(true);
+    } else {
+      CopyB32->setEnabled(false);
+    }
+
+    // Enable and set state of UserAutoDownload
+    UserAutoDownload->setEnabled(true);
+    UserAutoDownload->setChecked(User->getAutoDownloadEnabled());
+
+    // Set icon based on auto-download state
+    if (User->getAutoDownloadEnabled()) {
+      UserAutoDownload->setIcon(QIcon(ICON_USER_DOWNLOAD));
+    } else {
+      UserAutoDownload->setIcon(QIcon(ICON_USER_DOWNLOAD_DISABLED));
+    }
+
     contextMnuPos.addAction(UP);
     contextMnuPos.addAction(DOWN);
+    contextMnuPos.addSeparator();
+    contextMnuPos.addAction(TOP);
+    contextMnuPos.addAction(BOTTOM);
 
     contextMnu.addMenu(&contextMnuPos);
     // TODO: Fix width of context menu and ensure sub-menu overlaps
@@ -646,13 +674,12 @@ void form_MainWindow::OnlineStateChanged() {
     if (comboBox->count() < 6) {
       comboBox->clear();
 
-      comboBox->addItem(QIcon(ICON_USER_ONLINE), tr("Online")); // index 0
-      comboBox->addItem(QIcon(ICON_USER_WANTTOCHAT), tr("Want to chat")); // 1
-      comboBox->addItem(QIcon(ICON_USER_AWAY), tr("Away"));               // 2
-      comboBox->addItem(QIcon(ICON_USER_DONT_DISTURB),
-                        tr("No disturbo"));                           // 3
-      comboBox->addItem(QIcon(ICON_USER_INVISIBLE), tr("Invisible")); // 4
-      comboBox->addItem(QIcon(ICON_USER_OFFLINE), tr("Offline"));     // 5
+      comboBox->addItem(QIcon(ICON_USER_ONLINE), tr("Online"));              // index 0
+      comboBox->addItem(QIcon(ICON_USER_WANTTOCHAT), tr("Want to chat"));    // 1
+      comboBox->addItem(QIcon(ICON_USER_AWAY), tr("Away"));                  // 2
+      comboBox->addItem(QIcon(ICON_USER_DONT_DISTURB), tr("No disturbo"));   // 3
+      comboBox->addItem(QIcon(ICON_USER_INVISIBLE), tr("Invisible"));        // 4
+      comboBox->addItem(QIcon(ICON_USER_OFFLINE), tr("Offline"));            // 5
     }
 
     if (onlinestatus == User::USERONLINE) {
@@ -674,9 +701,13 @@ void form_MainWindow::OnlineStateChanged() {
       comboBox->setCurrentIndex(5);
       trayIcon->setIcon(QIcon(ICON_USER_OFFLINE));
     }
-  }
-  connect(comboBox, SIGNAL(currentIndexChanged(int)), this,
-          SLOT(onlineComboBoxChanged()));
+   }
+
+   // Refresh contact list icons when online status changes
+   slotLoadOwnAvatarImage();
+
+   connect(comboBox, SIGNAL(currentIndexChanged(int)), this,
+           SLOT(onlineComboBoxChanged()));
 }
 
 void form_MainWindow::openAboutDialog() {
@@ -882,6 +913,23 @@ void form_MainWindow::UserPositionDOWN() {
         listWidget->currentRow() / 3, listWidget->currentRow() / 3 + 1);
 }
 
+void form_MainWindow::UserPositionTOP() {
+  QListWidget *listWidget = this->listWidget;
+  int currentUserIndex = listWidget->currentRow() / 3;
+  if (currentUserIndex > 0) {
+    Core->getUserManager()->changeUserPositionInUserList(currentUserIndex, 0);
+  }
+}
+
+void form_MainWindow::UserPositionBOTTOM() {
+  QListWidget *listWidget = this->listWidget;
+  int currentUserIndex = listWidget->currentRow() / 3;
+  int totalUsers = listWidget->count() / 3;
+  if (currentUserIndex < totalUsers - 1) {
+    Core->getUserManager()->changeUserPositionInUserList(currentUserIndex, totalUsers - 1);
+  }
+}
+
 void form_MainWindow::UserInvisible(bool b) {
   QListWidgetItem *t = listWidget->item(listWidget->currentRow() + 1);
   QString Destination = t->text();
@@ -929,7 +977,7 @@ void form_MainWindow::openChatWindow(QString Destination) {
     connect(tmp, SIGNAL(closingChatWindow(QString)), this,
             SLOT(eventChatWindowClosed(QString)));
 
-    connect(Core, SIGNAL(signOwnAvatarImageChanged()), tmp,
+    connect(Core, SIGNAL(signOwnAvatarImageChanged()), this,
             SLOT(slotLoadOwnAvatarImage()));
 
     mAllOpenChatWindows.insert(Destination, tmp);
@@ -1055,6 +1103,50 @@ form_userSearch(*Core,*(Core->getSeedlessManager()));
     }
 }
 */
+
+void form_MainWindow::incomingUserAuthorizationRequest(QString destination, int streamID, QByteArray data) {
+  QMessageBox msgBox;
+  msgBox.setIcon(QMessageBox::Question);
+  msgBox.setText(tr("Incoming connection from unknown user"));
+  msgBox.setInformativeText(tr("Allow connection from %1?").arg(destination));
+  msgBox.setStandardButtons(QMessageBox::Yes | QMessageBox::No);
+  msgBox.setDefaultButton(QMessageBox::No);
+  int ret = msgBox.exec();
+
+  if (ret == QMessageBox::Yes) {
+    // Extract version
+    QByteArray temp = data.mid(data.indexOf("\t") + 1, data.indexOf("\n") - data.indexOf("\t") - 1);
+    QString version(temp);
+    bool OK = false;
+    double versiond = version.toDouble(&OK);
+    if (!OK) versiond = 0.0;
+
+    // Add the user
+    if (versiond >= 0.3) {
+      Core->getUserManager()->addNewUser("...identifying...", destination, streamID);
+    } else {
+      Core->getUserManager()->addNewUser("Unknown", destination, streamID);
+    }
+
+    CUser *User = Core->getUserManager()->getUserByI2P_Destination(destination);
+    if (User) {
+      User->setI2PStreamID(streamID);
+      User->setProtocolVersion(version);
+      User->setConnectionStatus(ONLINE);
+      // Remove first packet
+      QByteArray Data2 = data;
+      Data2 = Data2.remove(0, data.indexOf("\n") + 1);
+      Core->setStreamTypeToKnown(streamID, Data2, false);
+      if (versiond >= 0.3) {
+        User->setReceivedNicknameToUserNickname();
+      }
+    }
+  } else {
+    // Deny, close the connection
+    Core->getConnectionManager()->doDestroyStreamObjectByID(streamID);
+  }
+}
+
 void form_MainWindow::eventUserSearchWindowClosed() {
   delete mUserSearchWindow;
   mUserSearchWindow = NULL;
@@ -1082,9 +1174,8 @@ static void ElideLabel(QLabel *label, QString text) {
 }
 
 void form_MainWindow::eventNicknameChanged() {
-  // nicknamelabel->setText(Core->getUserInfos().Nickname);
   QString nick = Core->getUserInfos().Nickname;
-  ElideLabel(nicknamelabel, nick);
+  nicknamelabel->setText(nick);
 }
 
 void form_MainWindow::eventAvatarImageChanged() {
@@ -1095,6 +1186,65 @@ void form_MainWindow::eventAvatarImageChanged() {
                            Qt::KeepAspectRatio);
     avatarlabel->setAlignment(Qt::AlignCenter);
     avatarlabel->setPixmap(avatar);
+  }
+  slotLoadOwnAvatarImage();
+}
+
+void form_MainWindow::slotLoadOwnAvatarImage() {
+  ONLINESTATE onlineStatus = Core->getOnlineStatus();
+  bool isOnline = (onlineStatus != User::USEROFFLINE && onlineStatus != User::USERTRYTOCONNECT);
+
+  for (int i = 0; i < listWidget->count(); i++) {
+    QListWidgetItem *typeItem = listWidget->item(i + 2);
+    if (typeItem && typeItem->text() == "U") {
+      QListWidgetItem *destItem = listWidget->item(i + 1);
+      if (destItem) {
+        QString Destination = destItem->text();
+        CUser *User = Core->getUserManager()->getUserByI2P_Destination(Destination);
+        if (User) {
+          QListWidgetItem *iconItem = listWidget->item(i);
+          if (iconItem) {
+            if (isOnline) {
+              // When online, show status icons instead of avatars
+              switch (User->getOnlineState()) {
+              case USERTRYTOCONNECT:
+                iconItem->setIcon(QIcon(ICON_USER_OFFLINE));
+                break;
+              case USERINVISIBLE:
+              case USEROFFLINE:
+                iconItem->setIcon(QIcon(ICON_USER_OFFLINE));
+                break;
+              case USERONLINE:
+                iconItem->setIcon(QIcon(ICON_USER_ONLINE));
+                break;
+              case USERWANTTOCHAT:
+                iconItem->setIcon(QIcon(ICON_USER_WANTTOCHAT));
+                break;
+              case USERAWAY:
+                iconItem->setIcon(QIcon(ICON_USER_AWAY));
+                break;
+              case USERDONT_DISTURB:
+                iconItem->setIcon(QIcon(ICON_USER_DONT_DISTURB));
+                break;
+              case USERBLOCKEDYOU:
+                iconItem->setIcon(QIcon(ICON_USER_BLOCKED_YOU));
+                break;
+              }
+            } else {
+              // When offline, show avatars
+              QPixmap avatar;
+              if (User->getReceivedUserInfos().AvatarImage.isEmpty() == false) {
+                avatar.loadFromData(User->getReceivedUserInfos().AvatarImage);
+              } else {
+                avatar = QPixmap(":/icons/avatar.svg");
+              }
+              iconItem->setIcon(QIcon(avatar));
+            }
+          }
+        }
+      }
+    }
+    i += 2;
   }
 }
 
@@ -1119,5 +1269,25 @@ void form_MainWindow::openTopicSubscribeWindow() {
     mTopicSubscribeWindow->show();
   } else {
     mTopicSubscribeWindow->requestFocus();
+  }
+}
+
+void form_MainWindow::UserAutoDownload(bool enabled) {
+  QListWidgetItem *t = listWidget->item(listWidget->currentRow() + 1);
+  QString Destination = t->text();
+
+  CUser *User = Core->getUserManager()->getUserByI2P_Destination(Destination);
+  if (User) {
+    User->setAutoDownloadEnabled(enabled);
+
+    // Update the icon in the menu action
+    QAction *action = qobject_cast<QAction*>(sender());
+    if (action) {
+      if (enabled) {
+        action->setIcon(QIcon(ICON_USER_DOWNLOAD));
+      } else {
+        action->setIcon(QIcon(ICON_USER_DOWNLOAD_DISABLED));
+      }
+    }
   }
 }

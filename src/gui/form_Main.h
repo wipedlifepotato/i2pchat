@@ -20,6 +20,7 @@
 #ifndef FORM_MAIN_H
 #define FORM_MAIN_H
 
+
 #include <QClipboard>
 #include <QContextMenuEvent>
 #include <QCursor>
@@ -98,7 +99,7 @@ private slots:
   void namingMe();
   void copyDestination();
   void copyB32();
-  //void userAutoDownload();
+  void UserAutoDownload(bool enabled);
   void SendFile();
   void closeApplication();
   void eventUserChanged();
@@ -106,9 +107,12 @@ private slots:
   void showUserInfos();
   void UserPositionUP();
   void UserPositionDOWN();
+  void UserPositionTOP();
+  void UserPositionBOTTOM();
   void UserInvisible(bool b);
 
   void connecttreeWidgetCostumPopupMenu(QPoint point);
+  void slotLoadOwnAvatarImage();
   void deleteUserClicked();
   void renameUserCLicked();
   void addUserToBlockList();
@@ -116,10 +120,11 @@ private slots:
   void onlineComboBoxChanged();
   void toggleVisibility(QSystemTrayIcon::ActivationReason e);
   void toggleVisibilitycontextmenu();
-  void OnlineStateChanged();
-  //
-signals:
-  void changeAllowIncoming(bool);
+   void OnlineStateChanged();
+   void incomingUserAuthorizationRequest(QString destination, int streamID, QByteArray data);
+   //
+ signals:
+   void changeAllowIncoming(bool);
 
 private:
   void initStyle();
